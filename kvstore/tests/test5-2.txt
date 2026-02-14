@@ -1,0 +1,13 @@
+SWAP <key1> <value2>
+SCAN <key1> <key3>
+SWAP <key2> <value4>
+SCAN <key1> <key3>
+SWAP <key3> <value6>
+SCAN <key1> <key3>
+SWAP <key1> <value8>
+SCAN <key1> <key3>
+SWAP <key2> <value10>
+SCAN <key1> <key3>
+SWAP <key3> <value12>
+SCAN <key1> <key3>
+STOP

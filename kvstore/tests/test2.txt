@@ -1,0 +1,15 @@
+PUT <key1> <value1>
+PUT <key2> <value2>
+PUT <key3> <value3>
+PUT <key4> <value4>
+PUT <key5> <value5>
+SCAN <key1> <key9>
+SCAN <key1> <key10>
+SCAN <key2> <key4>
+SCAN <key4> <key2>
+SWAP <key2> <value21>
+GET <key2>
+SCAN <key2> <key4>
+DELETE <key2>
+SCAN <key2> <key4>
+STOP
