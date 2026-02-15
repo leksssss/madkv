@@ -107,22 +107,15 @@ class KvstoreClient {
   }
 
   void Scan(const string& start_key, const string& end_key) {
-    // Data we are sending to the server.
     ScanRequest request;
     request.set_start_key(start_key);
     request.set_end_key(end_key);
 
-    // Container for the data we expect from the server.
     ScanResponse response;
-
-    // Context for the client. It could be used to convey extra information to
-    // the server and/or tweak certain RPC behaviors.
     ClientContext context;
 
-    // The actual RPC.
     Status status = stub_->Scan(&context, request, &response);
 
-    // Act upon its status.
     if (status.ok()) {
       cout << "SCAN " << start_key << " " << end_key << " BEGIN\n";
       for (const auto& pair : response.pairs()) {
@@ -180,14 +173,14 @@ int main(int argc, char** argv) {
   // the argument "--target=" which is the only expected argument.
   string target_str = absl::GetFlag(FLAGS_target);
   // Setting channel args
-  // ChannelArguments channel_args;
-  // channel_args.SetInt("grpc.tcp_nodelay", 1);
-  // channel_args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 20000);
-  // channel_args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 10000);
+  ChannelArguments channel_args;
+  channel_args.SetInt("grpc.tcp_nodelay", 1);
+  channel_args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 40000);
+  channel_args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20000);
   // We indicate that the channel isn't authenticated (use of
   // InsecureChannelCredentials()).
   KvstoreClient kvstore(
-      grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+      grpc::CreateCustomChannel(target_str, grpc::InsecureChannelCredentials(), channel_args));
 
   while (true) {
     string input;

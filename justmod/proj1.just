@@ -6,59 +6,56 @@ default:
 
 # install extra dependencies of your KV code
 deps:
-    # FIXME: your dependency installation commands here
+    sudo apt update
+    sudo apt install protobuf-compiler libprotobuf-dev
+    sudo apt install cmake
+    sudo apt update
+    sudo apt install libabsl-dev
 
 # build your executables in release mode
 build:
     cd kvstore/cmake/build && make
-    # FIXME: your build commands here (don't include clean)
 
 # clean the build of your executables
 clean:
-    # FIXME: your clean commands here
     rm -rf kvstore/cmake/build
     mkdir -p kvstore/cmake/build
 
 # run your KV store server
-server listen="0.0.0.0:3777":
-    cd kvstore/cmake/build && ./kvstore_server &
+server listen="0.0.0.0:50051":
+    cd kvstore/cmake/build && ./kvstore_server --port=50051 &
     sleep 0.2
 
 # run you KV store client in stdin/out interface mode
-client server="127.0.0.1:3777":
-    cd kvstore/cmake/build && ./kvstore_client
+client target="10.10.1.1:50051":
+    cd kvstore/cmake/build && ./kvstore_client --target={{target}}
 
 # run your KV store testcase 1 client
-test1 server="127.0.0.1:3777":
+test1 server="10.10.1.1:50051":
     just p1::client < "kvstore/tests/test1.txt"
     just p1::kill
 
 # run your KV store testcase 2 client
-test2 server="127.0.0.1:3777":
+test2 server="10.10.1.1:50051":
     just p1::client < "kvstore/tests/test2.txt"
     just p1::kill
 
 # run your KV store testcase 3 client
-test3 server="127.0.0.1:3777":
+test3 server="10.10.1.1:50051":
     just p1::client < "kvstore/tests/test3-1.txt" & \
     just p1::client < "kvstore/tests/test3-2.txt" & \
     wait
     just p1::kill
 
 # run your KV store testcase 4 client(s)
-test4 server="127.0.0.1:3777":
-    # FIXME: your testcase 4 client(s) run commands here
-    #        for multi-client testcases, this recipe should run multiple
-    #        concurrent client processes; you may write an additional runner
-    #        utility or a scripting layer to manage multiple processes
+test4 server="10.10.1.1:50051":
     just p1::client < "kvstore/tests/test4-1.txt" & \
     just p1::client < "kvstore/tests/test4-2.txt" & \
     wait
     just p1::kill
 
 # run your KV store testcase 5 client(s)
-test5 server="127.0.0.1:3777":
-    # FIXME: your testcase 5 client(s) run commands here
+test5 server="10.10.1.1:50051":
     just p1::client < "kvstore/tests/test5-1.txt" & \
     just p1::client < "kvstore/tests/test5-2.txt" & \
     wait
@@ -69,15 +66,11 @@ kill:
     -pkill -f "^./kvstore_server" > /dev/null 2>&1
     -pkill -f "^./kvstore_client" > /dev/null 2>&1
 
-# NOTE: feel free to add more recipes as you see fit...
-#       also feel free to add extra parameters to the recipes as you see fit,
-#       but don't change the existing parameters
-
 python_run := if `which uv || true` != "" { "uv run" } else { "python3" }
 tmpdir_prefix := "/tmp/madkv-p1"
 
 # launch a long-running KV store service
-service listen="0.0.0.0:3777":
+service listen="0.0.0.0:50051":
     just p1::build
     just utils::build
     cargo run -p runner -r --bin service -- \
@@ -89,14 +82,14 @@ tmpdir subdir:
     mkdir -p "{{tmpdir_prefix}}/{{subdir}}"
 
 # run a student-provided testcase
-testcase num server="127.0.0.1:3777": (tmpdir "tests")
+testcase num server="10.10.1.1:50051": (tmpdir "tests")
     just p1::build
     just "p1::test{{num}}" "{{server}}" \
         | tee "{{tmpdir_prefix}}/tests/test{{num}}.log"
     just p1::kill
 
 # run a fuzz testing scenario
-fuzz nclis conflict="no" server="127.0.0.1:3777": (tmpdir "fuzz")
+fuzz nclis conflict="no" server="10.10.1.1:50051": (tmpdir "fuzz")
     just p1::build
     just utils::build
     cargo run -p runner -r --bin fuzzer -- \
@@ -107,7 +100,7 @@ fuzz nclis conflict="no" server="127.0.0.1:3777": (tmpdir "fuzz")
     just p1::kill
 
 # run a YCSB benchmark workload
-bench nclis wload server="127.0.0.1:3777": (tmpdir "bench")
+bench nclis wload server="10.10.1.1:50051": (tmpdir "bench")
     just p1::build
     just utils::build
     just utils::ycsb
@@ -125,29 +118,23 @@ report:
 # runs all unit tests necessary for report
 unit-testing:
     for n in 1 2 3 4 5; do \
-        just p1::service; \
         just p1::testcase $n; \
     done; \
 
 
 # runs all fuzz tests necessary for report
 fuzz-testing:
-    just p1::service
     just p1::fuzz 1 no
-    just p1::service
     just p1::fuzz 3 no
-    just p1::service
     just p1::fuzz 3 yes
 
 # runs all bench tests necessary for report
 bench-testing:
     for w in a b c d e f; do \
-        just p1::service; \
         just p1::bench 1 $w; \
     done; \
     for n in 10 25 40 55 70 85; do \
         for w in a c e; do \
-            just p1::service; \
             just p1::bench $n $w; \
         done; \
     done

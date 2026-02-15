@@ -1,10 +1,12 @@
 #include <grpcpp/ext/proto_server_reflection_plugin.h>
 #include <grpcpp/grpcpp.h>
 #include <grpcpp/health_check_service_interface.h>
+#include "absl/strings/str_format.h"
 
 #include <iostream>
 #include <memory>
 #include <string>
+#include <mutex>
 #include "absl/log/initialize.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
@@ -34,10 +36,12 @@ ABSL_FLAG(uint16_t, port, 3777, "Server port for the service");
 class KvstoreServiceImpl final : public Kvstore::Service {
   private:
     map<string, string> db;
+    mutex db_mutex;
 
   public:
     Status Put(ServerContext* context, const PutRequest* request,
                     PutResponse* response) override {
+      lock_guard<mutex> lock(db_mutex);
       auto it = db.find(request->key());
       if (it != db.end()) {
         response->set_found(true);
@@ -51,6 +55,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
 
     Status Swap(ServerContext* context, const SwapRequest* request,
                     SwapResponse* response) override {
+      lock_guard<mutex> lock(db_mutex);
       auto it = db.find(request->key());
       if (it != db.end()) {
         response->set_old_value(it->second);
@@ -64,6 +69,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
 
     Status Get(ServerContext* context, const GetRequest* request,
                     GetResponse* response) override {
+      lock_guard<mutex> lock(db_mutex);
       auto it = db.find(request->key());
       if(it != db.end()) {
         response->set_value(it->second);
@@ -74,6 +80,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
 
     Status Scan(ServerContext* context, const ScanRequest* request,
                     ScanResponse* response) override {
+      lock_guard<mutex> lock(db_mutex);
       auto it = db.lower_bound(request->start_key());
       while (it != db.end() && it->first <= request->end_key()) {
         auto* pair = response->add_pairs();
@@ -87,6 +94,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
 
     Status Delete(ServerContext* context, const DeleteRequest* request,
                     DeleteResponse* response) override {
+      lock_guard<mutex> lock(db_mutex);
       size_t count = db.erase(request->key());
       response->set_found(count > 0);
 
@@ -103,11 +111,10 @@ void RunServer(uint16_t port) {
   ServerBuilder builder;
   // Listen on the given address without any authentication mechanism.
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
-  // To keep the channels always hot
+  // To keep the channels always hot to avoid Nagle's algorithm
   builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIME_MS, 20000);
   builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
   builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 10000);
-  builder.AddChannelArgument("grpc.internal.yield_before_poll", 0);
   builder.AddChannelArgument("grpc.tcp_nodelay", 1);
   // Register "service" as the instance through which we'll communicate with
   // clients. In this case it corresponds to an *synchronous* service.

@@ -71,7 +71,7 @@ include CMakeFiles/kv_grpc_proto.dir/flags.make
 
 kvstore.pb.cc: ../../kvstore.proto
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --blue --bold --progress-dir=/users/AviKart/madkv/kvstore/cmake/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Generating kvstore.pb.cc, kvstore.pb.h, kvstore.grpc.pb.cc, kvstore.grpc.pb.h"
-	/users/AviKart/.local/bin/protoc-31.1.0 --grpc_out /users/AviKart/madkv/kvstore/cmake/build --cpp_out /users/AviKart/madkv/kvstore/cmake/build -I /users/AviKart/madkv/kvstore --plugin=protoc-gen-grpc="/users/AviKart/.local/bin/grpc_cpp_plugin" /users/AviKart/madkv/kvstore/kvstore.proto
+	/usr/local/bin/protoc-23.1.0 --grpc_out /users/AviKart/madkv/kvstore/cmake/build --cpp_out /users/AviKart/madkv/kvstore/cmake/build -I /users/AviKart/madkv/kvstore --plugin=protoc-gen-grpc="/usr/local/bin/grpc_cpp_plugin" /users/AviKart/madkv/kvstore/kvstore.proto
 
 kvstore.pb.h: kvstore.pb.cc
 	@$(CMAKE_COMMAND) -E touch_nocreate kvstore.pb.h
