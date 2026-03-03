@@ -96,6 +96,7 @@ kvstore_server: libkv_grpc_proto.a
 kvstore_server: /usr/local/lib/libabsl_flags.a
 kvstore_server: /usr/local/lib/libabsl_flags_parse.a
 kvstore_server: /usr/local/lib/libabsl_log_initialize.a
+kvstore_server: /usr/lib/librocksdb.so
 kvstore_server: /usr/local/lib/libgrpc++_reflection.a
 kvstore_server: /usr/local/lib/libgrpc++.a
 kvstore_server: /usr/local/lib/libprotobuf.a

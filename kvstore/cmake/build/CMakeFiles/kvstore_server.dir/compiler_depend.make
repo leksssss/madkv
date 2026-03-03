@@ -636,8 +636,78 @@ CMakeFiles/kvstore_server.dir/kvstore_server.cc.o: ../../kvstore_server.cc \
   /usr/local/include/google/protobuf/util/type_resolver_util.h \
   /usr/local/include/grpcpp/support/proto_buffer_reader.h \
   /usr/local/include/grpcpp/support/proto_buffer_writer.h \
-  /usr/local/include/grpcpp/support/stub_options.h
+  /usr/local/include/grpcpp/support/stub_options.h \
+  /usr/include/rocksdb/db.h \
+  /usr/include/rocksdb/iterator.h \
+  /usr/include/rocksdb/cleanable.h \
+  /usr/include/rocksdb/rocksdb_namespace.h \
+  /usr/include/rocksdb/slice.h \
+  /usr/include/rocksdb/status.h \
+  /usr/include/rocksdb/listener.h \
+  /usr/include/rocksdb/compaction_job_stats.h \
+  /usr/include/rocksdb/table_properties.h \
+  /usr/include/rocksdb/types.h \
+  /usr/include/rocksdb/metadata.h \
+  /usr/include/rocksdb/options.h \
+  /usr/include/rocksdb/advanced_options.h \
+  /usr/include/rocksdb/memtablerep.h \
+  /usr/include/rocksdb/universal_compaction.h \
+  /usr/include/rocksdb/comparator.h \
+  /usr/include/rocksdb/env.h \
+  /usr/include/c++/11/cstdarg \
+  /usr/include/rocksdb/thread_status.h \
+  /usr/include/rocksdb/file_checksum.h \
+  /usr/include/rocksdb/version.h \
+  /usr/include/rocksdb/write_buffer_manager.h \
+  /usr/include/rocksdb/cache.h \
+  /usr/include/rocksdb/memory_allocator.h \
+  /usr/include/rocksdb/statistics.h \
+  /usr/include/rocksdb/snapshot.h \
+  /usr/include/rocksdb/sst_file_writer.h \
+  /usr/include/rocksdb/transaction_log.h \
+  /usr/include/rocksdb/write_batch.h \
+  /usr/include/rocksdb/write_batch_base.h
 
+
+/usr/include/rocksdb/write_batch.h:
+
+/usr/include/rocksdb/transaction_log.h:
+
+/usr/include/rocksdb/sst_file_writer.h:
+
+/usr/include/rocksdb/snapshot.h:
+
+/usr/include/rocksdb/memory_allocator.h:
+
+/usr/include/rocksdb/cache.h:
+
+/usr/include/rocksdb/write_buffer_manager.h:
+
+/usr/include/rocksdb/file_checksum.h:
+
+/usr/include/rocksdb/env.h:
+
+/usr/include/rocksdb/comparator.h:
+
+/usr/include/rocksdb/universal_compaction.h:
+
+/usr/include/rocksdb/memtablerep.h:
+
+/usr/include/rocksdb/advanced_options.h:
+
+/usr/include/rocksdb/table_properties.h:
+
+/usr/include/rocksdb/compaction_job_stats.h:
+
+/usr/include/rocksdb/listener.h:
+
+/usr/include/rocksdb/status.h:
+
+/usr/include/rocksdb/slice.h:
+
+/usr/include/rocksdb/cleanable.h:
+
+/usr/include/rocksdb/iterator.h:
 
 /usr/local/include/grpcpp/support/stub_options.h:
 
@@ -752,6 +822,8 @@ kvstore.grpc.pb.h:
 /usr/local/include/google/protobuf/thread_safe_arena.h:
 
 /usr/include/x86_64-linux-gnu/bits/uio_lim.h:
+
+/usr/include/rocksdb/write_batch_base.h:
 
 /usr/local/include/absl/strings/internal/stringify_sink.h:
 
@@ -891,6 +963,8 @@ kvstore.grpc.pb.h:
 
 /usr/include/linux/errno.h:
 
+/usr/include/c++/11/cstdarg:
+
 /usr/include/x86_64-linux-gnu/bits/types/struct_FILE.h:
 
 /usr/local/include/grpcpp/impl/serialization_traits.h:
@@ -943,6 +1017,8 @@ kvstore.grpc.pb.h:
 
 /usr/local/include/grpc/support/time.h:
 
+/usr/include/rocksdb/version.h:
+
 /usr/local/include/grpc/compression.h:
 
 /usr/local/include/absl/log/absl_log.h:
@@ -994,6 +1070,8 @@ kvstore.grpc.pb.h:
 /usr/include/c++/11/bits/shared_ptr_atomic.h:
 
 /usr/local/include/grpcpp/impl/grpc_library.h:
+
+/usr/include/rocksdb/db.h:
 
 /usr/lib/gcc/x86_64-linux-gnu/11/include/mmintrin.h:
 
@@ -1067,6 +1145,8 @@ kvstore.grpc.pb.h:
 
 /usr/include/c++/11/chrono:
 
+/usr/include/rocksdb/statistics.h:
+
 /usr/include/x86_64-linux-gnu/bits/posix2_lim.h:
 
 /usr/local/include/grpcpp/security/tls_certificate_verifier.h:
@@ -1082,6 +1162,8 @@ kvstore.grpc.pb.h:
 /usr/include/c++/11/bits/cpp_type_traits.h:
 
 /usr/include/endian.h:
+
+/usr/include/rocksdb/metadata.h:
 
 /usr/include/c++/11/bits/ptr_traits.h:
 
@@ -1259,6 +1341,8 @@ kvstore.grpc.pb.h:
 
 /usr/include/c++/11/bits/functional_hash.h:
 
+/usr/include/rocksdb/options.h:
+
 /usr/include/c++/11/bits/string_view.tcc:
 
 /usr/local/include/absl/base/log_severity.h:
@@ -1280,6 +1364,8 @@ kvstore.grpc.pb.h:
 /usr/include/x86_64-linux-gnu/bits/timex.h:
 
 /usr/include/x86_64-linux-gnu/bits/stdio_lim.h:
+
+/usr/include/rocksdb/rocksdb_namespace.h:
 
 /usr/local/include/absl/base/policy_checks.h:
 
@@ -1514,6 +1600,8 @@ kvstore.grpc.pb.h:
 /usr/local/include/absl/base/internal/thread_identity.h:
 
 /usr/local/include/absl/base/internal/scheduling_mode.h:
+
+/usr/include/rocksdb/types.h:
 
 /usr/local/include/absl/strings/internal/cord_internal.h:
 
@@ -1766,6 +1854,8 @@ kvstore.pb.h:
 /usr/local/include/absl/base/internal/low_level_scheduling.h:
 
 /usr/local/include/absl/flags/config.h:
+
+/usr/include/rocksdb/thread_status.h:
 
 /usr/local/include/google/protobuf/port_undef.inc:
 

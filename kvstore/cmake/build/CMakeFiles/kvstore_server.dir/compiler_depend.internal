@@ -638,4 +638,34 @@ CMakeFiles/kvstore_server.dir/kvstore_server.cc.o
  /usr/local/include/grpcpp/support/proto_buffer_reader.h
  /usr/local/include/grpcpp/support/proto_buffer_writer.h
  /usr/local/include/grpcpp/support/stub_options.h
+ /usr/include/rocksdb/db.h
+ /usr/include/rocksdb/iterator.h
+ /usr/include/rocksdb/cleanable.h
+ /usr/include/rocksdb/rocksdb_namespace.h
+ /usr/include/rocksdb/slice.h
+ /usr/include/rocksdb/status.h
+ /usr/include/rocksdb/listener.h
+ /usr/include/rocksdb/compaction_job_stats.h
+ /usr/include/rocksdb/table_properties.h
+ /usr/include/rocksdb/types.h
+ /usr/include/rocksdb/metadata.h
+ /usr/include/rocksdb/options.h
+ /usr/include/rocksdb/advanced_options.h
+ /usr/include/rocksdb/memtablerep.h
+ /usr/include/rocksdb/universal_compaction.h
+ /usr/include/rocksdb/comparator.h
+ /usr/include/rocksdb/env.h
+ /usr/include/c++/11/cstdarg
+ /usr/include/rocksdb/thread_status.h
+ /usr/include/rocksdb/file_checksum.h
+ /usr/include/rocksdb/version.h
+ /usr/include/rocksdb/write_buffer_manager.h
+ /usr/include/rocksdb/cache.h
+ /usr/include/rocksdb/memory_allocator.h
+ /usr/include/rocksdb/statistics.h
+ /usr/include/rocksdb/snapshot.h
+ /usr/include/rocksdb/sst_file_writer.h
+ /usr/include/rocksdb/transaction_log.h
+ /usr/include/rocksdb/write_batch.h
+ /usr/include/rocksdb/write_batch_base.h
 

@@ -1,0 +1,11 @@
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+@page {
+    size: A4;
+    margin: 2cm;
+}

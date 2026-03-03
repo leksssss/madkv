@@ -221,6 +221,9 @@ KVStore_SOURCE_DIR:STATIC=/users/AviKart/madkv/kvstore
 //The directory containing a CMake configuration file for Protobuf.
 Protobuf_DIR:PATH=/usr/local/lib/cmake/protobuf
 
+//Path to a library.
+ROCKSDB_LIB:FILEPATH=/usr/lib/librocksdb.so
+
 //The directory containing a CMake configuration file for absl.
 absl_DIR:PATH=/usr/local/lib/cmake/absl
 

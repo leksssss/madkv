@@ -192,12 +192,18 @@ Discussion:
 <li> Throughput observations:
 <ul>
 <li> As the number of clients increases, the throughput also increases upto a point where the server is constantly processing a request and then plateaus.
-<li> The throughput of workload E (range scans) is lesser where as the throughput of worloads A and C (having only standard reads and updates) are similar.
+<ul>
+<li> This is the scalability bottleneck of a single threaded server.
+</ul>
+<li> The throughput of workload E (range scans) is lesser where as the throughput of worloads A and C (having only standard reads and updates) are similar. This is purely because scans do more work.
 </ul>
 <li> Latency observations:
 <ul>
 <li> The latencies of reads and updates are almost the same even as the number of clients increase, thus workloads A and C have similar latencies.
-<li> As seen from workload E, the latency of scans are much higher.
+<li> As seen from workload E, the latency of scans are much higher and increase with the number of clients as well.
+<ul>
+<li> Increasing latency with the number of clients is the scalability bottleneck of a single threaded server.
+</ul>
 <li> The latencies of insert are higher than reads are updates. This could be due to two factors:
 <ul>
 <li> The inserts are combined with scans (with a ratio of 5/95), hence increasing the latency as they have to wait for the scans to complete.

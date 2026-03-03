@@ -38,6 +38,8 @@ target_link_libraries(kv_grpc_proto
   ${_GRPC_GRPCPP}
   ${_PROTOBUF_LIBPROTOBUF})
 
+find_library(ROCKSDB_LIB NAMES rocksdb)
+
 # Targets kvstore_[async_](client|server)
 foreach(_target
   kvstore_client kvstore_server)
@@ -49,6 +51,7 @@ foreach(_target
     absl::flags_parse
     absl::log
     absl::log_initialize
+    ${ROCKSDB_LIB}
     ${_REFLECTION}
     ${_GRPC_GRPCPP}
     ${_PROTOBUF_LIBPROTOBUF})

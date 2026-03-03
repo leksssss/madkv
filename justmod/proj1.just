@@ -27,7 +27,7 @@ server listen="0.0.0.0:50051":
     sleep 0.2
 
 # run you KV store client in stdin/out interface mode
-client target="10.10.1.1:50051":
+client target="localhost:3777":
     cd kvstore/cmake/build && ./kvstore_client --target={{target}}
 
 # run your KV store testcase 1 client
