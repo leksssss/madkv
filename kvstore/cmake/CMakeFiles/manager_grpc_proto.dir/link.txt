@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmanager_grpc_proto.a CMakeFiles/manager_grpc_proto.dir/manager.grpc.pb.cc.o CMakeFiles/manager_grpc_proto.dir/manager.pb.cc.o
+/usr/bin/ranlib libmanager_grpc_proto.a

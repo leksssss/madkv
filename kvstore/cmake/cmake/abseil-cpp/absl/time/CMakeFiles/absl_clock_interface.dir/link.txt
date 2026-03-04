@@ -1,0 +1,2 @@
+/usr/bin/ar qc libabsl_clock_interface.a CMakeFiles/absl_clock_interface.dir/clock_interface.cc.o
+/usr/bin/ranlib libabsl_clock_interface.a

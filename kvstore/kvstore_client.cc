@@ -4,11 +4,16 @@
 #include <memory>
 #include <string>
 #include <fstream>
+#include <map>
+#include <thread>
+#include <chrono>
 
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
-#include "cmake/build/kvstore.pb.h"
-#include "cmake/build/kvstore.grpc.pb.h"
+#include "kvstore.pb.h"
+#include "kvstore.grpc.pb.h"
+#include "manager.pb.h"
+#include "manager.grpc.pb.h"
 
 using grpc::Channel;
 using grpc::ChannelArguments;
@@ -26,14 +31,50 @@ using kvstore::ScanResponse;
 using kvstore::DeleteRequest;
 using kvstore::DeleteResponse;
 using kvstore::KeyValuePair;
+using manager::Manager;
+using manager::ClusterInfoRequest;
+using manager::ClusterInfoResponse;
 using namespace std;
 
-ABSL_FLAG(string, target, "localhost:3777", "Server address");
+ABSL_FLAG(string, manager_addr, "localhost:3666", "Manager address");
+
+shared_ptr<Channel> MakeChannel(const string& addr)
+{
+  ChannelArguments args;
+  args.SetInt("grpc.tcp_nodelay", 1);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 40000);
+  args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20000);
+  return grpc::CreateCustomChannel(addr, grpc::InsecureChannelCredentials(), args);
+}
 
 class KvstoreClient {
  public:
-  KvstoreClient(shared_ptr<Channel> channel)
-      : stub_(Kvstore::NewStub(channel)) {}
+  KvstoreClient(const string& manager_addr)
+  {
+    auto channel = MakeChannel(manager_addr);
+    auto manager_stub = Manager::NewStub(channel);
+
+    // Retry until all servers are registered
+    while(true)
+    {
+      ClusterInfoRequest req;
+      ClusterInfoResponse res;
+      ClientContext ctx;
+      Status s = manager_stub->GetClusterInfo(&ctx, req, &res);
+      if(s.ok())
+      {
+        num_servers = res.num_servers();
+        for(const auto& s: res.servers())
+        {
+          stubs_[s.server_id()] = Kvstore::NewStub(MakeChannel(s.address()));
+        }
+        cout << "Connected to cluster: " << num_servers << " servers" << endl;
+        return;
+      }
+      cerr << "Waiting for cluster to be ready... " << s.error_message() << endl;
+      this_thread::sleep_for(chrono::milliseconds(500));
+    }
+  }
 
   // Assembles the client's payload, sends it and presents the response back
   // from the server.
@@ -46,12 +87,11 @@ class KvstoreClient {
     // Container for the data we expect from the server.
     PutResponse response;
 
-    // Context for the client. It could be used to convey extra information to
-    // the server and/or tweak certain RPC behaviors.
-    ClientContext context;
-
-    // The actual RPC.
-    Status status = stub_->Put(&context, request, &response);
+    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub)
+    {
+      ClientContext context;
+      return stub->Put(&context, request, &response);
+    });
 
     // Act upon its status.
     if (status.ok()) {
@@ -71,9 +111,12 @@ class KvstoreClient {
     request.set_new_value(new_value);
 
     SwapResponse response;
-    ClientContext context;
-
-    Status status = stub_->Swap(&context, request, &response);
+ 
+    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub)
+    {
+      ClientContext context;
+      return stub->Swap(&context, request, &response);
+    });
     
     if(status.ok()) {
       if(response.has_old_value()) {
@@ -91,9 +134,12 @@ class KvstoreClient {
     request.set_key(key);
     
     GetResponse response;
-    ClientContext context;
 
-    Status status = stub_->Get(&context, request, &response);
+    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub)
+    {
+      ClientContext context;
+      return stub->Get(&context, request, &response);
+    });
 
     if(status.ok()) {
       if(response.has_value()) {
@@ -112,19 +158,37 @@ class KvstoreClient {
     request.set_end_key(end_key);
 
     ScanResponse response;
-    ClientContext context;
 
-    Status status = stub_->Scan(&context, request, &response);
+    // Fan out to all servers and merge results into sorted map
+    map<string, string> merged;
+    for(auto& [id, stub] : stubs_)
+    {
+      ScanResponse response;
+      while(true)
+      {
+        ClientContext context;
+        Status status = stub->Scan(&context, request, &response);
+        if(status.ok())
+        {
+          for(const auto& pair : response.pairs())
+          {
+            merged[pair.key()] = pair.value();
+          }
+          break;
+        }
 
-    if (status.ok()) {
-      cout << "SCAN " << start_key << " " << end_key << " BEGIN\n";
-      for (const auto& pair : response.pairs()) {
-        cout << "\t" << pair.key() << " " << pair.value() << "\n";
+        cerr << "Scan to server " << id << " failed, retrying ..." << endl;
+        this_thread::sleep_for(chrono::milliseconds(500));
       }
-      cout << "SCAN END\n";
-    } else {
-      cout << status.error_code() << ": " << status.error_message() << endl;
     }
+
+    
+    cout << "SCAN " << start_key << " " << end_key << " BEGIN\n";
+    for (const auto& [k, v] : merged) {
+      cout << "\t" << k << " " << v << "\n";
+    }
+    cout << "SCAN END\n";
+   
   }
 
   void Delete(const string& key) {
@@ -132,9 +196,11 @@ class KvstoreClient {
     request.set_key(key);
 
     DeleteResponse response;
-    ClientContext context;
-
-    Status status = stub_->Delete(&context, request, &response);
+    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub) 
+    {  
+      ClientContext ctx;
+      return stub->Delete(&ctx, request, &response);
+    });
 
     if(status.ok()) {
       if (response.found()) {
@@ -148,7 +214,30 @@ class KvstoreClient {
   }
 
  private:
-  unique_ptr<Kvstore::Stub> stub_;
+  int num_servers;
+  map<int, unique_ptr<Kvstore::Stub>> stubs_;
+
+  // Hash function to get server id
+  int GetServerId(const string& key)
+  {
+    return hash<string>{}(key) % num_servers;
+  }
+
+  // Route to correct server, retry on failure
+  template <typename F> Status CallWithRetry(const string& key, F rpc_call)
+  {
+    int server_id = GetServerId(key);
+    while(true)
+    {
+      Status s = rpc_call(stubs_[server_id].get());
+      if(s.ok())
+      {
+        return s;
+      }
+      cerr << "RPC failed, retrying ... (" << s.error_message() << ")" << endl;
+      this_thread::sleep_for(chrono::milliseconds(500));
+    }
+  }
 };
 
 vector<string> split(const string& str, const string& delimiter = " ") {
@@ -166,22 +255,13 @@ vector<string> split(const string& str, const string& delimiter = " ") {
     return tokens;
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
   absl::ParseCommandLine(argc, argv);
-  // Instantiate the client. It requires a channel, out of which the actual RPCs
-  // are created. This channel models a connection to an endpoint specified by
-  // the argument "--target=" which is the only expected argument.
-  string target_str = absl::GetFlag(FLAGS_target);
-  // Setting channel args
-  ChannelArguments channel_args;
-  channel_args.SetInt("grpc.tcp_nodelay", 1);
-  channel_args.SetInt(GRPC_ARG_KEEPALIVE_TIME_MS, 40000);
-  channel_args.SetInt(GRPC_ARG_KEEPALIVE_TIMEOUT_MS, 20000);
-  // We indicate that the channel isn't authenticated (use of
-  // InsecureChannelCredentials()).
-  KvstoreClient kvstore(
-      grpc::CreateCustomChannel(target_str, grpc::InsecureChannelCredentials(), channel_args));
+  string manager_addr = absl::GetFlag(FLAGS_manager_addr);
 
+  KvstoreClient kvstore(manager_addr);
+  
   while (true) {
     string input;
     getline(cin, input);

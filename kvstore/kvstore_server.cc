@@ -3,6 +3,7 @@
 #include <grpcpp/health_check_service_interface.h>
 #include "absl/strings/str_format.h"
 
+#include <thread>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -10,8 +11,10 @@
 #include "absl/log/initialize.h"
 #include "absl/flags/flag.h"
 #include "absl/flags/parse.h"
-#include "cmake/build/kvstore.pb.h"
-#include "cmake/build/kvstore.grpc.pb.h"
+#include "kvstore.pb.h"
+#include "kvstore.grpc.pb.h"
+#include "manager.pb.h"
+#include "manager.grpc.pb.h"
 
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
@@ -32,14 +35,20 @@ using kvstore::ScanResponse;
 using kvstore::DeleteRequest;
 using kvstore::DeleteResponse;
 using kvstore::KeyValuePair;
+
+using manager::Manager;
+using manager::RegisterRequest;
+using manager::RegisterResponse;
+
 using ROCKSDB_NAMESPACE::DB;
 using ROCKSDB_NAMESPACE::Options;
 using ROCKSDB_NAMESPACE::WriteOptions;
 using namespace std;
 
-const string kDBPath = "rocksdb";
-
-ABSL_FLAG(uint16_t, port, 3777, "Server port for the service");
+ABSL_FLAG(string, manager_addr, "", "Manager address e.g. 1.2.3.4:3666");
+ABSL_FLAG(string, api_listen, "0.0.0.0:3777", "Server listen address");
+ABSL_FLAG(int32_t, server_id, 0, "Unique server ID starting from 0");
+ABSL_FLAG(string, backer_path, "./backer", "Path to persistent storage directory");
 
 class KvstoreServiceImpl final : public Kvstore::Service {
   private:
@@ -98,7 +107,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
 
   public:
 
-    KvstoreServiceImpl() {
+    KvstoreServiceImpl(const string& backer_path) {
       // Cleanup if needed
       // rocksdb::DestroyDB(kDBPath, rocksdb::Options());
       // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
@@ -109,7 +118,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
       write_options.sync = true;
 
       rocksdb::DB* raw_storage;
-      ROCKSDB_NAMESPACE::Status s = DB::Open(options, kDBPath, &raw_storage);
+      ROCKSDB_NAMESPACE::Status s = DB::Open(options, backer_path, &raw_storage);
       assert(s.ok());
       storage.reset(raw_storage);
       // RockDB writes are atomic so the tail will be fully written.
@@ -196,17 +205,43 @@ class KvstoreServiceImpl final : public Kvstore::Service {
 
       return Status::OK;
     }
+
+    static void RegisterWithManager(const string& manager_addr, int server_id, const string& my_addr)
+    {
+      auto channel = grpc::CreateChannel(manager_addr, grpc::InsecureChannelCredentials());
+      auto stub = Manager::NewStub(channel);
+
+      RegisterRequest req;
+      req.set_server_id(server_id);
+      req.set_address(my_addr);
+
+      while(true)
+      {
+        RegisterResponse res;
+        grpc::ClientContext ctx;
+        Status s = stub->RegisterServer(&ctx, req, &res);
+        if(s.ok())
+        {
+          cout << "Registered with manager as server " << server_id << ", cluster size = " << res.num_servers() << endl;
+          return;
+        }
+        cerr << "Failed to register with manager, retrying... (" << s.error_message() << ")" << endl;
+        this_thread::sleep_for(chrono::milliseconds(500));
+      }
+    }
 };
 
-void RunServer(uint16_t port) {
-  string server_address = absl::StrFormat("0.0.0.0:%d", port);
-  KvstoreServiceImpl service;
+void RunServer(const string& listen_addr, const string& manager_addr, int server_id, const string& backer_path) 
+{
+  // Register with manager first, before accepting any client requests
+  KvstoreServiceImpl::RegisterWithManager(manager_addr, server_id, listen_addr);
+  KvstoreServiceImpl service(backer_path);
 
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
   ServerBuilder builder;
   // Listen on the given address without any authentication mechanism.
-  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+  builder.AddListeningPort(listen_addr, grpc::InsecureServerCredentials());
   // To keep the channels always hot to avoid Nagle's algorithm
   builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_TIME_MS, 20000);
   builder.AddChannelArgument(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1);
@@ -217,16 +252,28 @@ void RunServer(uint16_t port) {
   builder.RegisterService(&service);
   // Finally assemble the server.
   unique_ptr<Server> server(builder.BuildAndStart());
-  cout << "Server listening on " << server_address << std::endl;
+  cout << "Server " << server_id << " listening on " << listen_addr << std::endl;
 
   // Wait for the server to shutdown. Note that some other thread must be
   // responsible for shutting down the server for this call to ever return.
   server->Wait();
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
   absl::ParseCommandLine(argc, argv);
   absl::InitializeLog();
-  RunServer(absl::GetFlag(FLAGS_port));
+
+  string listen_addr = absl::GetFlag(FLAGS_api_listen);
+  string manager_addr = absl::GetFlag(FLAGS_manager_addr);
+  int server_id = absl::GetFlag(FLAGS_server_id);
+  string backer_path = absl::GetFlag(FLAGS_backer_path);
+
+  if (manager_addr.empty()) {
+    cerr << "Error: --manager_addr is required" << endl;
+    return 1;
+  }
+
+  RunServer(listen_addr, manager_addr, server_id, backer_path);
   return 0;
 }
