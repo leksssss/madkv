@@ -175,8 +175,8 @@ bench-set1 manager="127.0.0.1:3666":
 
 bench-set2 manager="127.0.0.1:3666":
     #!/bin/bash
-    for s in 1; do \
-        for n in 30; do \
+    for s in 1 5; do \
+        for n in 1 20 30; do \
             just p2::kill; \
             sleep 2; \
             just p2::clear_storage; \

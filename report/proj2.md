@@ -83,14 +83,13 @@ The fuzz testing similar to the custom test above allowed us to test how our cod
 <li> Workload C (read-only) dominates throughput by a large margin compared to all other workloads. This is because the reads don't touch RocksDB's write path, don't acquire exclusive locks, and don't sync to disk. 
 <li> All workloads involving writes (A, B, D, E, F) show significantly lower throughput because every write requires a synchronous RocksDB sync to disk.
 <li> The throughput of workloads B, D and E are slightly better because they are majorly read traffic.
-<li> Increasing the partitions has slightly improved the throughput because writes are spread across servers.
 <li> The latency metrics of workload C is very negligible compared to the other workloads.
 <li> Write-heavy workloads show significantly higher average and P99 latency, with P99 latency being several times higher than average latency, indicating that tail latency is disproportionately affected by disk sync operations and lock contention under concurrent writes.
 </ul>
 
 #### Set 2: Workload A, scaling clients, 1 vs 5 partitions:
 <ul>
-<li> With 1 partition, throughput barely changes regardless of how many clients are added. It saturates after a point, and adding more clients just increases queuing without improving throughput.
+<li> With 1 partition, throughput doesn't change much. It saturates after a point, and adding more clients doesn't degrade performance.
 <li> With 5 partitions, throughput rises noticeably as client count increases before eventually plateauing. 
 <li> This shows that more partitions can handle more concurrent clients as the work is spread across independent write paths.
 </ul>
