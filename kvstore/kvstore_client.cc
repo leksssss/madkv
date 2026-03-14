@@ -68,7 +68,7 @@ class KvstoreClient {
         {
           stubs_[s.server_id()] = Kvstore::NewStub(MakeChannel(s.address()));
         }
-        cout << "Connected to cluster: " << num_servers << " servers" << endl;
+        // cout << "Connected to cluster: " << num_servers << " servers" << endl;
         return;
       }
       cerr << "Waiting for cluster to be ready... " << s.error_message() << endl;
@@ -167,8 +167,8 @@ class KvstoreClient {
       while(true)
       {
         ClientContext context;
-        Status status = stub->Scan(&context, request, &response);
-        if(status.ok())
+        Status s = stub->Scan(&context, request, &response);
+        if(s.ok())
         {
           for(const auto& pair : response.pairs())
           {
@@ -177,7 +177,7 @@ class KvstoreClient {
           break;
         }
 
-        cerr << "Scan to server " << id << " failed, retrying ..." << endl;
+        cerr << "Scan to server " << id << " failed " << s.error_message() << "retrying ..." << endl;
         this_thread::sleep_for(chrono::milliseconds(500));
       }
     }
@@ -220,7 +220,9 @@ class KvstoreClient {
   // Hash function to get server id
   int GetServerId(const string& key)
   {
-    return hash<string>{}(key) % num_servers;
+    int id = hash<string>{}(key) % num_servers;
+    // cout << "[routing] " << key << " -> server " << id << endl;
+    return id;
   }
 
   // Route to correct server, retry on failure

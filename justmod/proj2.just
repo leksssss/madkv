@@ -1,4 +1,5 @@
 set working-directory := '..'
+set shell := ["bash", "-cu"]
 
 # list project 2 just recipes
 default:
@@ -6,43 +7,82 @@ default:
 
 # install extra dependencies of your KV code
 deps:
-    # FIXME: your dependency installation commands here
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    source $HOME/.local/bin/env 
+    cd madkv
+    uv python install 3.12
+    uv sync
+    wget -qO - 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg --dearmor | sudo tee /usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg 1> /dev/null
+    echo "deb [arch=all,$(dpkg --print-architecture) signed-by=/usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg] https://proget.makedeb.org prebuilt-mpr $(lsb_release -cs)" | sudo tee /etc/apt/sources.list.d/prebuilt-mpr.list
+    sudo apt update
+    sudo apt install tree just default-jre liblog4j2-java
+    sudo apt update
+    sudo apt install protobuf-compiler libprotobuf-dev
+    sudo apt install cmake
+    sudo apt install libabsl-dev
+    cargo install just
+    sudo apt-get install librocksdb-dev rocksdb-tools
+    sudo apt update
+
+    sudo apt install -y \
+    protobuf-compiler \
+    libprotobuf-dev \
+    libprotoc-dev \
+    libgrpc++-dev \
+    libgrpc-dev \
+    pkg-config
 
 # build your executables in release mode
 build:
-    # FIXME: your build commands here (don't include clean)
+    cd kvstore/cmake/build && cmake ../.. && make
 
 # clean the build of your executables
 clean:
-    # FIXME: your clean commands here
+    rm -rf kvstore/cmake/build
+    mkdir -p kvstore/cmake/build
+
+clear_storage:
+    rm -rf /tmp/backer.s0
+    rm -rf /tmp/backer.s1
+    rm -rf /tmp/backer.s2
+    rm -rf /tmp/backer.s3
+    rm -rf /tmp/backer.s4
 
 # run your KV store manager
 manager man_port="3666" servers="127.0.0.1:3777,127.0.0.1:3778,127.0.0.1:3779":
-    # FIXME: your manager run command here, listening on 0.0.0.0:man_port for
-    #        both server and client registration requests
+    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
 
-# run your KV store server
-server id="0" manager="127.0.0.1:3666" api_port="3777" backer_path="./backer.s0":
-    # FIXME: your server run command here. The server should first contact the
-    #        manager to get its assignment of key range(s). It then listens on
-    #        0.0.0.0:api_port for new clients, and stores all durable state
-    #        under backer_path
+manager5 man_port="3666" servers="127.0.0.1:3775,127.0.0.1:3776,127.0.0.1:3777,127.0.0.1:3778,127.0.0.1:3779":
+    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
 
-# run you KV store client in stdin/out interface mode
+# run a single KV store server
+server id="0" manager="127.0.0.1:3666" api_port="3777" backer_path="/tmp/backer.s0":
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:{{api_port}} --server_id {{id}} --backer_path {{backer_path}}
+
+# launch all 3 servers at once in the background
+servers manager="127.0.0.1:3666":
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0 &
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3778 --server_id 1 --backer_path /tmp/backer.s1 &
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3779 --server_id 2 --backer_path /tmp/backer.s2 &
+
+servers5 manager="127.0.0.1:3666":
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3775 --server_id 3 --backer_path /tmp/backer.s3 &
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3776 --server_id 4 --backer_path /tmp/backer.s4 &
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0 &
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3778 --server_id 1 --backer_path /tmp/backer.s1 &
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3779 --server_id 2 --backer_path /tmp/backer.s2 &
+
+# run your KV store client in stdin/out interface mode
 client manager="127.0.0.1:3666":
-    # FIXME: your client run command here, querying manager at addr for server
-    #        registration information
+    cd kvstore/cmake/build && ./kvstore_client --manager_addr {{manager}}
 
 # kill all processes of your KV store system
 kill:
-    # FIXME: your kill commands here
-    #        make sure that it kills all server, clients, and any extra helper
-    #        processes of your system; redirecting both out & err to /dev/null
-    #        is recommended
-    #   TIP: commands such as 'pkill' may return non-zero exit code on success,
-    #        which would by default abort the 'just' recipe early; prepend the
-    #        command with a '-' sign to ignore its exit code
-
+    -pkill -f kvstore_manager
+    -pkill -f kvstore_server
+    -pkill -f kvstore_client
+    
 # NOTE: feel free to add more recipes as you see fit...
 #       also feel free to add extra parameters to the recipes as you see fit,
 #       but don't change the existing parameters
@@ -70,7 +110,7 @@ tmpdir subdir:
     mkdir -p "{{tmpdir_prefix}}/{{subdir}}"
 
 # run a fuzz testing scenario
-fuzz nservers="1" crashing="no" manager="127.0.0.1:3666": (tmpdir "fuzz")
+fuzz nservers="3" crashing="no" manager="127.0.0.1:3666": (tmpdir "fuzz")
     just p2::build
     just utils::build
     cargo run -p runner -r --bin fuzzer -- \
@@ -95,3 +135,74 @@ bench nclis wload nservers="1" manager="127.0.0.1:3666": (tmpdir "bench")
 # generate .md report template from existing results (wip)
 report:
     {{python_run}} sumgen/proj2.py
+
+manager1 man_port="3666" servers="127.0.0.1:3777":
+    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
+
+manager3 man_port="3666":
+    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers 127.0.0.1:3777,127.0.0.1:3778,127.0.0.1:3779
+
+servers1 manager="127.0.0.1:3666":
+    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0
+
+# runs all bench tests necessary for report
+bench-set1 manager="127.0.0.1:3666":
+    #!/bin/bash
+    for s in 1 3 5; do \
+        for w in a b c d e f; do \
+            just p2::kill; \
+            sleep 2; \
+            just p2::clear_storage; \
+            if [ $s -eq 1 ]; then \
+                just p2::manager1 & \
+                sleep 1; \
+                just p2::servers1 & \
+            elif [ $s -eq 3 ]; then \
+                just p2::manager3 & \
+                sleep 1; \
+                just p2::servers & \
+            else \
+                just p2::manager5 & \
+                sleep 1; \
+                just p2::servers5 & \
+            fi; \
+            sleep 2; \
+            just p2::bench 10 $w $s {{manager}}; \
+            just p2::kill; \
+            sleep 2; \
+        done; \
+    done
+
+bench-set2 manager="127.0.0.1:3666":
+    #!/bin/bash
+    for s in 1; do \
+        for n in 30; do \
+            just p2::kill; \
+            sleep 2; \
+            just p2::clear_storage; \
+            if [ $s -eq 1 ]; then \
+                just p2::manager1 & \
+                sleep 1; \
+                just p2::servers1 & \
+            else \
+                just p2::manager5 & \
+                sleep 1; \
+                just p2::servers5 & \
+            fi; \
+            sleep 2; \
+            just p2::bench $n a $s {{manager}}; \
+            just p2::kill; \
+            sleep 2; \
+        done; \
+    done
+
+run_bench manager="127.0.0.1:3666":
+    just p2::kill
+    sleep 2
+    just p2::clear_storage
+    just p2::manager3  & \
+    sleep 2
+    just p2::servers  & \
+    sleep 2
+    just p2::bench 10 f 3 {{manager}}
+    just p2::kill

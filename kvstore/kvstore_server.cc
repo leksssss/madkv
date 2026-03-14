@@ -94,7 +94,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
       log_entry.ParseFromString(it->value().ToString());
       string key = log_entry.key();
       string value = log_entry.has_value()? log_entry.value() : "";
-      cout << "Key: " << key << " | Value: " << value << endl;
+      // cout << "Key: " << key << " | Value: " << value << endl;
       if (value == "") {
         db.erase(key);
       } else {
@@ -109,7 +109,7 @@ class KvstoreServiceImpl final : public Kvstore::Service {
 
     KvstoreServiceImpl(const string& backer_path) {
       // Cleanup if needed
-      // rocksdb::DestroyDB(kDBPath, rocksdb::Options());
+      // rocksdb::DestroyDB(backer_path, rocksdb::Options());
       // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
       options.IncreaseParallelism();
       options.OptimizeLevelStyleCompaction();
