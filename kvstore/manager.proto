@@ -24,10 +24,11 @@ message ClusterInfoResponse
 {
     int32 num_servers = 1;
     repeated ServerInfo servers = 2;
+    int32 server_rf = 3;
 }
 
 message ServerInfo
 {
-    int32 server_id = 1;
+    int32 server_id = 1; // partition * server_rf + replica
     string address = 2;
 }

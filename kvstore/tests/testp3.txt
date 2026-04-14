@@ -1,0 +1,26 @@
+just p3::managers
+just p3::servers
+
+just p3::client
+PUT p0key hello
+GET p0key 
+
+pkill -f "replica_id 1.*partition_id 0"
+pkill -f "replica_id 1.*partition_id 1"
+
+PUT p0key world
+GET p0key
+PUT p1key foo
+GET p1key
+
+
+
+# leader failure
+just p3::managers && just p3::servers
+PUT leader_test before
+
+kill -9 $(lsof -ti tcp:3707)
+
+GET leader_test 
+PUT leader_test after
+GET leader_test 

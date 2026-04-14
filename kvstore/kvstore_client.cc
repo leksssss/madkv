@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <map>
 #include <thread>
 #include <chrono>
@@ -36,7 +37,17 @@ using manager::ClusterInfoRequest;
 using manager::ClusterInfoResponse;
 using namespace std;
 
-ABSL_FLAG(string, manager_addr, "localhost:3666", "Manager address");
+ABSL_FLAG(string, manager_addrs, "localhost:3666", "Manager addresses list");
+
+vector<string> SplitByComma(const string& s) {
+    vector<string> result;
+    if (s.empty()) return result;
+    stringstream ss(s);
+    string token;
+    while (getline(ss, token, ','))
+        if (!token.empty()) result.push_back(token);
+    return result;
+}
 
 shared_ptr<Channel> MakeChannel(const string& addr)
 {
@@ -47,31 +58,61 @@ shared_ptr<Channel> MakeChannel(const string& addr)
   return grpc::CreateCustomChannel(addr, grpc::InsecureChannelCredentials(), args);
 }
 
+// Server encodes "not_leader:N" in the error message where N is the leader's
+// replica index within the partition.
+int ParseLeaderHint(const string& msg)
+{
+  auto pos = msg.find("not_leader:");
+  if(pos == string::npos)
+  {
+    return -1;
+  }
+  try
+  {
+    return stoi(msg.substr(pos+11));
+  }
+  catch (...)
+  {
+    return -1;
+  }
+}
+
 class KvstoreClient {
  public:
-  KvstoreClient(const string& manager_addr)
+  KvstoreClient(const vector<string>& manager_addrs)
   {
-    auto channel = MakeChannel(manager_addr);
-    auto manager_stub = Manager::NewStub(channel);
-
-    // Retry until all servers are registered
+    // Try each manager address in a loop until we get cluster info.
+    // Handles both single manager and replicated manager.
     while(true)
     {
-      ClusterInfoRequest req;
-      ClusterInfoResponse res;
-      ClientContext ctx;
-      Status s = manager_stub->GetClusterInfo(&ctx, req, &res);
-      if(s.ok())
+      for(const auto& addr: manager_addrs)
       {
-        num_servers = res.num_servers();
-        for(const auto& s: res.servers())
+        auto manager_stub = Manager::NewStub(MakeChannel(addr));
+        ClusterInfoRequest req;
+        ClusterInfoResponse res;
+        ClientContext ctx;
+        Status s = manager_stub->GetClusterInfo(&ctx, req, &res);
+        if(s.ok())
         {
-          stubs_[s.server_id()] = Kvstore::NewStub(MakeChannel(s.address()));
+          num_partitions = res.num_servers();
+          // Compute server_rf from the number of servers: total_servers / num_partitions
+          server_rf = res.servers_size() / num_partitions;
+          stubs_.clear();
+          stubs_.resize(num_partitions);
+          for (int i = 0; i < num_partitions; i++) {
+            stubs_[i].resize(server_rf);
+          }
+          for(const auto& s: res.servers())
+          {
+            int p = s.server_id() / server_rf;
+            int r = s.server_id() % server_rf;
+            stubs_[p][r] = Kvstore::NewStub(MakeChannel(s.address()));
+          }
+          current_leader.assign(num_partitions, 0);
+          // cout << "Connected: " << num_partitions << " partitions, rf=" << server_rf << "\n";
+          return;
         }
-        // cout << "Connected to cluster: " << num_servers << " servers" << endl;
-        return;
       }
-      cerr << "Waiting for cluster to be ready... " << s.error_message() << endl;
       this_thread::sleep_for(chrono::milliseconds(500));
     }
   }
@@ -87,9 +128,10 @@ class KvstoreClient {
     // Container for the data we expect from the server.
     PutResponse response;
 
-    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub)
+    auto status = CallLeader(key, [&](Kvstore::Stub* stub)
     {
       ClientContext context;
+      context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
       return stub->Put(&context, request, &response);
     });
 
@@ -101,7 +143,7 @@ class KvstoreClient {
         cout << "PUT " << key << " not_found\n";
       }
     } else {
-      cout << status.error_code() << ": " << status.error_message() << endl;
+      cerr << status.error_code() << ": " << status.error_message() << endl;
     }
   }
 
@@ -112,20 +154,21 @@ class KvstoreClient {
 
     SwapResponse response;
  
-    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub)
+    auto status = CallLeader(key, [&](Kvstore::Stub* stub)
     {
       ClientContext context;
+      context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
       return stub->Swap(&context, request, &response);
     });
     
     if(status.ok()) {
       if(response.has_old_value()) {
-        cout << "SWAP " << key <<  " " << response.old_value() << endl; 
+        cout << "SWAP " << key <<  " " << response.old_value() << endl;
       } else {
-       cout << "SWAP " << key <<  " null\n";  
+       cout << "SWAP " << key <<  " null\n";
       }
     } else {
-      cout << status.error_code() << ":" << status.error_message() << endl;
+      cerr << status.error_code() << ":" << status.error_message() << endl;
     }
   }
 
@@ -135,20 +178,21 @@ class KvstoreClient {
     
     GetResponse response;
 
-    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub)
+    auto status = CallLeader(key, [&](Kvstore::Stub* stub)
     {
       ClientContext context;
+      context.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
       return stub->Get(&context, request, &response);
     });
 
     if(status.ok()) {
       if(response.has_value()) {
-        cout << "GET " << key <<  " " << response.value() << endl; 
+        cout << "GET " << key <<  " " << response.value() << endl;
       } else {
-        cout << "GET " << key <<  " null\n"; 
-      }    
+        cout << "GET " << key <<  " null\n";
+      }
     } else {
-      cout << status.error_code() << ":" << status.error_message() << endl;
+      cerr << status.error_code() << ":" << status.error_message() << endl;
     }
   }
 
@@ -159,26 +203,25 @@ class KvstoreClient {
 
     ScanResponse response;
 
-    // Fan out to all servers and merge results into sorted map
+    // Fan out to all partitions and merge results into sorted map
+    // TODO: need to implement this!!!
     map<string, string> merged;
-    for(auto& [id, stub] : stubs_)
+    for(int p = 0; p < num_partitions; p++)
     {
-      ScanResponse response;
-      while(true)
+      ScanResponse partition_response;
+      auto status = CallLeaderPartition(p, [&](Kvstore::Stub* stub) 
       {
-        ClientContext context;
-        Status s = stub->Scan(&context, request, &response);
-        if(s.ok())
-        {
-          for(const auto& pair : response.pairs())
-          {
-            merged[pair.key()] = pair.value();
-          }
-          break;
-        }
-
-        cerr << "Scan to server " << id << " failed " << s.error_message() << "retrying ..." << endl;
-        this_thread::sleep_for(chrono::milliseconds(500));
+        ClientContext ctx;
+        ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
+        return stub->Scan(&ctx, request, &partition_response);
+      });
+      if (!status.ok()) {
+        cerr << status.error_code() << ":" << status.error_message() << endl;
+        return;
+      }
+      for(const auto& pair : partition_response.pairs())
+      {
+        merged[pair.key()] = pair.value();
       }
     }
 
@@ -196,9 +239,10 @@ class KvstoreClient {
     request.set_key(key);
 
     DeleteResponse response;
-    auto status = CallWithRetry(key, [&](Kvstore::Stub* stub) 
+    auto status = CallLeader(key, [&](Kvstore::Stub* stub) 
     {  
       ClientContext ctx;
+      ctx.set_deadline(std::chrono::system_clock::now() + std::chrono::seconds(10));
       return stub->Delete(&ctx, request, &response);
     });
 
@@ -209,36 +253,67 @@ class KvstoreClient {
         cout << "DELETE " << key << " not_found\n";
       }
     } else {
-      cout << status.error_code() << ": " << status.error_message() << endl;
+      cerr << status.error_code() << ": " << status.error_message() << endl;
     }
   }
 
  private:
-  int num_servers;
-  map<int, unique_ptr<Kvstore::Stub>> stubs_;
+  int num_partitions = 0;
+  int server_rf = 1;
 
-  // Hash function to get server id
-  int GetServerId(const string& key)
+  // stubs_[partition][replica]
+  vector<vector<unique_ptr<Kvstore::Stub>>> stubs_;
+  vector<int> current_leader;
+
+  int PartitionFor(const string& key)
   {
-    int id = hash<string>{}(key) % num_servers;
-    // cout << "[routing] " << key << " -> server " << id << endl;
-    return id;
+    return (int)(hash<string>{}(key) % num_partitions);
   }
 
-  // Route to correct server, retry on failure
-  template <typename F> Status CallWithRetry(const string& key, F rpc_call)
+  // Route to key's partition and find the leader within it
+  template <typename F> Status CallLeader(const string& key, F rpc_call)
   {
-    int server_id = GetServerId(key);
-    while(true)
+    return CallLeaderPartition(PartitionFor(key), rpc_call);
+  }
+
+  // Main loop: need to check if okay!?
+    //   1. Send RPC to current_leader[partition].
+    //   2. On UNAVAILABLE with "not_leader:N" hint -> update leader to N, retry.
+    //   3. On connection/timeout error -> round-robin to next replica, retry.
+    //   4. On success -> return.
+  template<typename F>
+  Status CallLeaderPartition(int partition, F rpc)
+  {
+    const int max_attempts = 200;
+    for(int attempt=0; attempt < max_attempts; attempt++)
     {
-      Status s = rpc_call(stubs_[server_id].get());
+      int r = current_leader[partition];
+      Status s = rpc(stubs_[partition][r].get());
+
       if(s.ok())
       {
         return s;
       }
-      cerr << "RPC failed, retrying ... (" << s.error_message() << ")" << endl;
-      this_thread::sleep_for(chrono::milliseconds(500));
+      if(s.error_code() == grpc::StatusCode::UNAVAILABLE)
+      {
+        int hint = ParseLeaderHint(s.error_message());
+        if(hint >= 0 && hint < server_rf)
+        {
+          current_leader[partition] = hint;
+        }
+        else
+        {
+          current_leader[partition] = (r+1) % server_rf;
+        }
+      }
+      else
+      {
+        current_leader[partition] = (r+1) % server_rf;
+      }
+        
+      this_thread::sleep_for(chrono::milliseconds(10));
     }
+    return Status(grpc::StatusCode::UNAVAILABLE, "no leader found after retries");
   }
 };
 
@@ -260,9 +335,10 @@ vector<string> split(const string& str, const string& delimiter = " ") {
 int main(int argc, char** argv) 
 {
   absl::ParseCommandLine(argc, argv);
-  string manager_addr = absl::GetFlag(FLAGS_manager_addr);
+  string managers_addrs = absl::GetFlag(FLAGS_manager_addrs);
 
-  KvstoreClient kvstore(manager_addr);
+  vector<string> manager_list = SplitByComma(managers_addrs);
+  KvstoreClient kvstore(manager_list);
   
   while (true) {
     string input;

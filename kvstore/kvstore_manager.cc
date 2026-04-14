@@ -29,12 +29,15 @@ using manager::ClusterInfoResponse;
 using manager::ServerInfo;
 using namespace std;
 
-ABSL_FLAG(string, man_listen, "0.0.0.0:3666", "Manager listen address");
-ABSL_FLAG(string, servers, "", "Comma-separated list of server addresses");
+ABSL_FLAG(string,  man_listen,    "0.0.0.0:3666", "Listen address for client/server requests");
+ABSL_FLAG(int32_t, server_rf,     1,              "Replication factor for partition servers");
+ABSL_FLAG(string,  server_addrs,  "",             "All server API addresses ordered by partition then replica");
+ABSL_FLAG(string,  backer_path,   "./backer.m",   "Durable storage path (bonus)");
 
 vector<string> SplitByComma(const string& s)
 {
     vector<string> result;
+    if (s == "none" || s.empty()) return result;
     stringstream ss(s);
     string token;
     while(getline(ss, token, ','))
@@ -50,53 +53,64 @@ vector<string> SplitByComma(const string& s)
 class ManagerServiceImpl final : public Manager::Service
 {
     private:
-        int num_servers;
+        // replication factor for each partition's server group
+        int server_rf;
+        // server_addrs[partition][replica] = api_address
+        vector<vector<string>> server_addrs;
+        // num of partitions = total server count / server_rf
+        int num_partitions;
         map<int, string> server_registry;
         mutex registry_mutex;
     
     public:
-        ManagerServiceImpl(int num_servers) : num_servers(num_servers) {}
+        ManagerServiceImpl(int server_rf, const vector<string>& addrs) : server_rf(server_rf) {
+            num_partitions = addrs.size() / server_rf;
+            // Reshape list into server_addrs[partition][replica]
+            server_addrs.resize(num_partitions);
+            for (int p = 0; p < num_partitions; p++) {
+                server_addrs[p].resize(server_rf);
+                for (int r = 0; r < server_rf; r++) {
+                    server_addrs[p][r] = addrs[p * server_rf + r];
+                }
+            }
+            cout << "Manager: " << num_partitions << " partitions, rf=" << server_rf << "\n";
+        }
 
         Status RegisterServer(ServerContext* context, const RegisterRequest* request, RegisterResponse* response) override 
         {
             lock_guard<mutex> lock(registry_mutex);
             int id = request->server_id();
             string addr = request->address();
-            if(id < 0 || id >= num_servers) 
-            {
-                return Status(grpc::StatusCode::INVALID_ARGUMENT, "server_id out of range");
-            }
+   
             server_registry[id] = addr;
-            cout << "Server " << id << "registered at " << addr << " (" << server_registry.size() << "/" << num_servers << ")" << endl;
+            cout << "Server " << id << "registered at " << addr << " (" << server_registry.size() << "/" << num_partitions * server_rf << ")\n" << endl;
             
-            response->set_num_servers(num_servers);
+            response->set_num_servers(num_partitions * server_rf);
             return Status::OK;
         }
 
+        // Returns all partition replica addresses so the client can:
+        //   1. Hash a key to a partition
+        //   2. Try each replica in the partition to find the Raft leader
         Status GetClusterInfo(ServerContext* context, const ClusterInfoRequest* request, ClusterInfoResponse* response) override
         {
-            lock_guard<mutex> lock(registry_mutex);
-
-            int sz = (int)server_registry.size();
-            if(sz < num_servers)
-            {
-                return Status(grpc::StatusCode::UNAVAILABLE, "All servers not registered yet");
-            }
-
-            response->set_num_servers(num_servers);
-            for(auto& [id, addr] : server_registry)
-            {
-                ServerInfo* s = response->add_servers();
-                s->set_server_id(id);
-                s->set_address(addr);
+            response->set_num_servers(num_partitions);
+            
+            for (int p = 0; p < num_partitions; p++) {
+                for (int r = 0; r < server_rf; r++) {
+                    ServerInfo* info = response->add_servers();
+                
+                    info->set_server_id(p * server_rf + r);
+                    info->set_address(server_addrs[p][r]);
+                }
             }
             return Status::OK;
         }
 };
 
-void RunManager(const string& listen_addr, int num_servers)
+void RunManager(const string& listen_addr, int server_rf, const vector<string>& addrs)
 {
-    ManagerServiceImpl service(num_servers);
+    ManagerServiceImpl service(server_rf, addrs);
 
     grpc::EnableDefaultHealthCheckService(true);
     grpc::reflection::InitProtoReflectionServerBuilderPlugin();
@@ -106,7 +120,7 @@ void RunManager(const string& listen_addr, int num_servers)
     builder.RegisterService(&service);
 
     unique_ptr<Server> server(builder.BuildAndStart());
-    cout << "Manager listening on " << listen_addr << " with " << num_servers << "servers" << endl;
+    cout << "Manager listening on " << listen_addr << endl;
 
     server->Wait();
 
@@ -118,17 +132,23 @@ int main(int argc, char** argv)
     absl::InitializeLog();
 
     string listen_addr = absl::GetFlag(FLAGS_man_listen);
-    string servers_flag = absl::GetFlag(FLAGS_servers);
+    int server_rf  = absl::GetFlag(FLAGS_server_rf);
+    string servers_flag = absl::GetFlag(FLAGS_server_addrs);
 
-    if(servers_flag.empty())
-    {
-        cerr << "Error: --servers flag is required" << endl;
+    if (servers_flag.empty()) {
+        cerr << "Error: --server_addrs is required\n";
         return 1;
     }
 
     vector<string> server_addrs = SplitByComma(servers_flag);
-    int num_servers = server_addrs.size();
 
-    RunManager(listen_addr, num_servers);
+    // Sanity check: total addresses must be divisible by replication factor
+    if ((int)server_addrs.size() % server_rf != 0) {
+        cerr << "Error: " << server_addrs.size() << " server addresses"
+             << " not divisible by server_rf=" << server_rf << "\n";
+        return 1;
+    }
+
+    RunManager(listen_addr, server_rf, server_addrs);
     return 0;
 }

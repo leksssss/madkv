@@ -1,0 +1,2 @@
+/usr/bin/ar qc libraft_grpc_proto.a CMakeFiles/raft_grpc_proto.dir/raft.grpc.pb.cc.o CMakeFiles/raft_grpc_proto.dir/raft.pb.cc.o
+/usr/bin/ranlib libraft_grpc_proto.a

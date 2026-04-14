@@ -7,14 +7,6 @@ default:
 
 # install extra dependencies of your KV code
 deps:
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    source $HOME/.local/bin/env 
-    cd madkv
-    uv python install 3.12
-    uv sync
-    wget -qO - 'https://proget.makedeb.org/debian-feeds/prebuilt-mpr.pub' | gpg --dearmor | sudo tee /usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg 1> /dev/null
-    echo "deb [arch=all,$(dpkg --print-architecture) signed-by=/usr/share/keyrings/prebuilt-mpr-archive-keyring.gpg] https://proget.makedeb.org prebuilt-mpr $(lsb_release -cs)" | sudo tee /etc/apt/sources.list.d/prebuilt-mpr.list
     sudo apt update
     sudo apt install tree just default-jre liblog4j2-java
     sudo apt update
@@ -24,6 +16,7 @@ deps:
     cargo install just
     sudo apt-get install librocksdb-dev rocksdb-tools
     sudo apt update
+    sudo apt install protobuf-compiler-grpc
 
     sudo apt install -y \
     protobuf-compiler \
@@ -35,12 +28,14 @@ deps:
 
 # build your executables in release mode
 build:
-    cd kvstore/cmake/build && cmake ../.. && make
+    mkdir -p build-kvstore
+    cmake -S kvstore -B build-kvstore -DCMAKE_BUILD_TYPE=Release
+    cmake --build build-kvstore -- -j"$(nproc)"
 
 # clean the build of your executables
 clean:
-    rm -rf kvstore/cmake/build
-    mkdir -p kvstore/cmake/build
+    rm -rf build-kvstore
+    mkdir -p build-kvstore
 
 clear_storage:
     rm -rf /tmp/backer.s0
@@ -51,31 +46,31 @@ clear_storage:
 
 # run your KV store manager
 manager man_port="3666" servers="127.0.0.1:3777,127.0.0.1:3778,127.0.0.1:3779":
-    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
+    ./build-kvstore/kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
 
 manager5 man_port="3666" servers="127.0.0.1:3775,127.0.0.1:3776,127.0.0.1:3777,127.0.0.1:3778,127.0.0.1:3779":
-    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
+    ./build-kvstore/kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
 
 # run a single KV store server
 server id="0" manager="127.0.0.1:3666" api_port="3777" backer_path="/tmp/backer.s0":
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:{{api_port}} --server_id {{id}} --backer_path {{backer_path}}
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:{{api_port}} --server_id {{id}} --backer_path {{backer_path}}
 
 # launch all 3 servers at once in the background
 servers manager="127.0.0.1:3666":
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0 &
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3778 --server_id 1 --backer_path /tmp/backer.s1 &
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3779 --server_id 2 --backer_path /tmp/backer.s2 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3778 --server_id 1 --backer_path /tmp/backer.s1 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3779 --server_id 2 --backer_path /tmp/backer.s2 &
 
 servers5 manager="127.0.0.1:3666":
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3775 --server_id 3 --backer_path /tmp/backer.s3 &
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3776 --server_id 4 --backer_path /tmp/backer.s4 &
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0 &
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3778 --server_id 1 --backer_path /tmp/backer.s1 &
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3779 --server_id 2 --backer_path /tmp/backer.s2 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3775 --server_id 3 --backer_path /tmp/backer.s3 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3776 --server_id 4 --backer_path /tmp/backer.s4 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3778 --server_id 1 --backer_path /tmp/backer.s1 &
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3779 --server_id 2 --backer_path /tmp/backer.s2 &
 
 # run your KV store client in stdin/out interface mode
 client manager="127.0.0.1:3666":
-    cd kvstore/cmake/build && ./kvstore_client --manager_addr {{manager}}
+    ./build-kvstore/kvstore_client --manager_addr {{manager}}
 
 # kill all processes of your KV store system
 kill:
@@ -137,13 +132,13 @@ report:
     {{python_run}} sumgen/proj2.py
 
 manager1 man_port="3666" servers="127.0.0.1:3777":
-    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
+    ./build-kvstore/kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers {{servers}}
 
 manager3 man_port="3666":
-    cd kvstore/cmake/build && ./kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers 127.0.0.1:3777,127.0.0.1:3778,127.0.0.1:3779
+    ./build-kvstore/kvstore_manager --man_listen 0.0.0.0:{{man_port}} --servers 127.0.0.1:3777,127.0.0.1:3778,127.0.0.1:3779
 
 servers1 manager="127.0.0.1:3666":
-    cd kvstore/cmake/build && ./kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0
+    ./build-kvstore/kvstore_server --manager_addr {{manager}} --api_listen 0.0.0.0:3777 --server_id 0 --backer_path /tmp/backer.s0
 
 # runs all bench tests necessary for report
 bench-set1 manager="127.0.0.1:3666":

@@ -49,4 +49,4 @@ kvstore/cmake/CMakeFiles/
 kvstore/cmake/Makefile
 kvstore/cmake/cmake_install.cmake
 kvstore/cmake/*.a
-kvstore/cmake/*.so
+kvstore/cmake/*.socmake/_deps
