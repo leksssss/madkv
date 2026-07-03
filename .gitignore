@@ -29,9 +29,24 @@ target/
 # Python
 .venv/
 **/__pycache__/
+report/venv/
 
 # Project-specific
 ycsb/
-report/
 backer.*/
 .remotes
+
+#cpp
+kvstore/cmake/
+
+# build artifacts
+kvstore/cmake/build/
+kvstore/cmake/abseil-cpp/
+kvstore/cmake/*.pb.cc
+kvstore/cmake/*.pb.h
+kvstore/cmake/CMakeCache.txt
+kvstore/cmake/CMakeFiles/
+kvstore/cmake/Makefile
+kvstore/cmake/cmake_install.cmake
+kvstore/cmake/*.a
+kvstore/cmake/*.socmake/_deps

@@ -1,0 +1,13 @@
+SWAP <key1> <value1>
+GET <key1>
+SWAP <key2> <value3>
+GET <key2>
+SWAP <key3> <value5>
+GET <key3>
+SWAP <key1> <value7>
+GET <key1>
+SWAP <key2> <value9>
+GET <key2>
+SWAP <key3> <value11>
+GET <key3>
+STOP

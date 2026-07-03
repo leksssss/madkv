@@ -1,0 +1,13 @@
+PUT <key1> <value1>
+GET <key1>
+PUT <key1> <value2>
+GET <key1>
+SWAP <key2> <value3>
+GET <key2>
+SWAP <key2> <value4>
+GET <key2>
+SCAN <key1> <key3>
+DELETE <key2>
+DELETE <key2>
+GET <key2>
+STOP

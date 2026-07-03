@@ -1,0 +1,2 @@
+/usr/bin/ar qc libabsl_source_location.a CMakeFiles/absl_source_location.dir/source_location.cc.o
+/usr/bin/ranlib libabsl_source_location.a

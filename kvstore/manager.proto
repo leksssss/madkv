@@ -1,0 +1,34 @@
+syntax = "proto3";
+package manager;
+
+service Manager
+{
+    rpc RegisterServer(RegisterRequest) returns (RegisterResponse);
+    rpc GetClusterInfo(ClusterInfoRequest) returns (ClusterInfoResponse);
+}
+
+message RegisterRequest
+{
+    int32 server_id = 1;
+    string address = 2;
+}
+
+message RegisterResponse
+{
+    int32 num_servers = 1; // to computer hash % num_servers
+}
+
+message ClusterInfoRequest {}
+
+message ClusterInfoResponse
+{
+    int32 num_servers = 1;
+    repeated ServerInfo servers = 2;
+    int32 server_rf = 3;
+}
+
+message ServerInfo
+{
+    int32 server_id = 1; // partition * server_rf + replica
+    string address = 2;
+}

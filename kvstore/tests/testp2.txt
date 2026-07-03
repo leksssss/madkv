@@ -1,0 +1,22 @@
+just p2::manager
+just p2::servers
+just p2::client
+PUT a1 v1
+PUT a2 v2
+PUT a6 v6
+SWAP a1 v11
+SWAP a2 v21
+
+GET a1
+GET a2
+GET a6
+SCAN a1 a6
+SCAN a1 a3
+
+pkill -f "server_id 0"
+GET a1
+GET a6
+
+GET a2
+
+just p2::server
